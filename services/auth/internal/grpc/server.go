@@ -2,35 +2,51 @@ package grpc
 
 import (
 	"context"
-	"log"
 	"strings"
 
-	pb "github.com/krrristina/PR2_sem2/proto"
+	pb "github.com/krrristina/PR3_sem2/proto"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
 type AuthGRPCServer struct {
 	pb.UnimplementedAuthServiceServer
+	Log *zap.Logger
 }
 
 func (s *AuthGRPCServer) Verify(ctx context.Context, req *pb.VerifyRequest) (*pb.VerifyResponse, error) {
-	log.Printf("[Auth gRPC] Verify called, token: %q", req.Token)
+	// Достаём request-id из gRPC метаданных
+	reqID := ""
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		if vals := md.Get("x-request-id"); len(vals) > 0 {
+			reqID = vals[0]
+		}
+	}
 
-	// Токен пустой → Unauthenticated
+	s.Log.Info("verify called",
+		zap.String("request_id", reqID),
+		zap.Bool("has_token", req.Token != ""),
+	)
+
 	if req.Token == "" {
-		log.Println("[Auth gRPC] empty token → Unauthenticated")
+		s.Log.Warn("empty token",
+			zap.String("request_id", reqID),
+		)
 		return nil, status.Error(codes.Unauthenticated, "invalid token: token is empty")
 	}
 
-	// Токен начинается на "invalid" → Unauthenticated
 	if strings.HasPrefix(req.Token, "invalid") {
-		log.Println("[Auth gRPC] bad token → Unauthenticated")
+		s.Log.Warn("invalid token",
+			zap.String("request_id", reqID),
+		)
 		return nil, status.Error(codes.Unauthenticated, "invalid token")
 	}
 
-	// Всё ок
-	log.Println("[Auth gRPC] token is valid")
+	s.Log.Info("token valid",
+		zap.String("request_id", reqID),
+	)
 	return &pb.VerifyResponse{
 		Valid:   true,
 		Subject: "user@example.com",

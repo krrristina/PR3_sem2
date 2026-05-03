@@ -1,16 +1,25 @@
 package main
 
 import (
-	"log"
 	"net"
 	"os"
 
-	pb "github.com/krrristina/PR2_sem2/proto"
-	grpcserver "github.com/krrristina/PR2_sem2/services/auth/internal/grpc"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
+
+	pb "github.com/krrristina/PR3_sem2/proto"
+	grpcserver "github.com/krrristina/PR3_sem2/services/auth/internal/grpc"
+	"github.com/krrristina/PR3_sem2/shared/logger"
 )
 
 func main() {
+	// Создаём логгер для сервиса auth
+	log, err := logger.New("auth")
+	if err != nil {
+		panic(err)
+	}
+	defer log.Sync()
+
 	port := os.Getenv("AUTH_GRPC_PORT")
 	if port == "" {
 		port = "50051"
@@ -18,14 +27,15 @@ func main() {
 
 	lis, err := net.Listen("tcp", ":"+port)
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		log.Fatal("failed to listen", zap.Error(err))
 	}
 
 	s := grpc.NewServer()
-	pb.RegisterAuthServiceServer(s, &grpcserver.AuthGRPCServer{})
+	pb.RegisterAuthServiceServer(s, &grpcserver.AuthGRPCServer{Log: log})
 
-	log.Printf("gRPC Auth server listening on :%s", port)
+	log.Info("gRPC Auth server starting", zap.String("port", port))
+
 	if err := s.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
+		log.Fatal("failed to serve", zap.Error(err))
 	}
 }
